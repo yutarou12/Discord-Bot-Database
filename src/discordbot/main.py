@@ -1,8 +1,21 @@
 import os
+import asyncio
+import logging
+import platform
+from datetime import datetime, timedelta, timezone
+
 import discord
 from discord.ext import commands
-from datetime import datetime, timedelta
-import platform
+
+from libs.config import load_settings
+from libs.service import BotRegistrationService
+from libs.storage import BotRepository
+
+logger = logging.getLogger(__name__)
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+extensions_list = [f[:-3] for f in os.listdir("./cogs") if f.endswith(".py")]
 
 allowed_mentions = discord.AllowedMentions(
     everyone=False,
@@ -10,35 +23,62 @@ allowed_mentions = discord.AllowedMentions(
     roles=False
 )
 
-bot = commands.Bot(
-    command_prefix='d:',
-    allowed_mentions=allowed_mentions
-)
-
-# 登録ボットデータ key=追加された時のmessage.id value=ボット名
-bot.bots_data = {}
-
-# 登録時の制限データ
-rules = {}
-rules['bot_name_max_length'] = 50
-rules['bot_name_min_length'] = 3
-bot.rules = rules
-
-bot.border_color = 0x7289DA
+def configure_logging(level_name: str) -> None:
+    logging.basicConfig(
+        level=getattr(logging, level_name, logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
 
 
-@bot.event
-async def on_ready():
-    jst = datetime.utcnow() + timedelta(hours=9)
-    dpy_ver = discord.__version__
-    python_var = platform.python_version()
-    print('--------------------------------')
-    print(jst.strftime('%Y/%m/%d %H:%M:%S'))
-    print(f'{bot.user.name} ({bot.user.id})')
-    print(f'discord.py {dpy_ver} python {python_var}')
-    print('--------------------------------')
+class DiscordBot(commands.Bot):
+    def __init__(self, service: BotRegistrationService) -> None:
+        intents = discord.Intents.default()
+        super().__init__(
+            command_prefix=commands.when_mentioned_or("dbd:"),
+            intents=intents,
+            allowed_mentions=allowed_mentions
+        )
+        self.service = service
 
-bot.load_extension('cogs.bot_register')
-bot.load_extension('cogs.bot_show')
+    async def setup_hook(self) -> None:
+        try:
+            await self.load_extension('jishaku')
+        except discord.ext.commands.ExtensionAlreadyLoaded:
+            await self.reload_extension('jishaku')
+        for ext in extensions_list:
+            try:
+                await self.load_extension(f'cogs.{ext}')
+            except discord.ext.commands.ExtensionAlreadyLoaded:
+                await self.reload_extension(f'cogs.{ext}')
+                
+    async def on_ready(self) -> None:
+        jst = datetime.now(timezone.utc) + timedelta(hours=9)
+        dpy_ver = discord.__version__
+        python_var = platform.python_version()
+        logger.info('--------------------------------')
+        logger.info(jst.strftime('%Y/%m/%d %H:%M:%S'))
+        logger.info(f'{self.user.name} ({self.user.id})')
+        logger.info(f'discord.py {dpy_ver} python {python_var}')
+        logger.info('--------------------------------')
+    
 
-bot.run(os.environ['DISCORD_BOT_DB_TOKEN'])
+async def main() -> None:
+    settings = load_settings()
+    configure_logging(settings.log_level)
+
+    if not settings.discord_token:
+        raise RuntimeError("DISCORD_BOT_DB_TOKEN を .env に設定してください。")
+
+    repository = BotRepository(settings.database_url)
+    repository.initialize()
+    service = BotRegistrationService(repository)
+    bot = DiscordBot(service)
+
+    try:
+        bot.run(settings.discord_token)
+    finally:
+        await bot.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
