@@ -200,6 +200,7 @@ class BotRegistrationButton(ui.Button):
             return await interaction.response.send_message("この操作はコマンド実行者のみ可能です。", ephemeral=True)
         return await interaction.response.send_modal(BotRegistrationModal(self._service, self._author_id))
 
+
 class BotRegistrationPanelView(ui.LayoutView):
     row = ui.ActionRow()
 
@@ -367,6 +368,7 @@ class SearchPanelView(ui.LayoutView):
         )
         self.add_item(container)
         self.add_item(self.row)
+
 
 class SearchPanelViewSearchButton(ui.Button):
     def __init__(self, service: BotRegistrationService, author_id: int):

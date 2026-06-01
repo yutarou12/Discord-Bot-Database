@@ -1,5 +1,4 @@
 import os
-import asyncio
 import logging
 import platform
 from datetime import datetime, timedelta, timezone
@@ -22,6 +21,7 @@ allowed_mentions = discord.AllowedMentions(
     users=False,
     roles=False
 )
+
 
 def configure_logging(level_name: str) -> None:
     logging.basicConfig(
@@ -50,7 +50,7 @@ class DiscordBot(commands.Bot):
                 await self.load_extension(f'cogs.{ext}')
             except discord.ext.commands.ExtensionAlreadyLoaded:
                 await self.reload_extension(f'cogs.{ext}')
-                
+
     async def on_ready(self) -> None:
         jst = datetime.now(timezone.utc) + timedelta(hours=9)
         dpy_ver = discord.__version__
