@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "discord-bot-database-app"
+version = "0.1.0"
+description = "Discord Bot database management app"
+requires-python = ">=3.14"
+dependencies = [
+  "discord.py==2.7.1",
+  "fastapi",
+  "email-validator",
+  "uvicorn",
+  "psycopg2",
+  "psycopg2-binary",
+  "sqlalchemy",
+  "redis",
+  "hiredis",
+  "python-dotenv>=1.2.2",
+  "jishaku>=2.7.5",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
