@@ -60,9 +60,9 @@ class DiscordBot(commands.Bot):
         logger.info(f'{self.user.name} ({self.user.id})')
         logger.info(f'discord.py {dpy_ver} python {python_var}')
         logger.info('--------------------------------')
-    
 
-async def main() -> None:
+
+if __name__ == "__main__":
     settings = load_settings()
     configure_logging(settings.log_level)
 
@@ -74,11 +74,4 @@ async def main() -> None:
     service = BotRegistrationService(repository)
     bot = DiscordBot(service)
 
-    try:
-        bot.run(settings.discord_token)
-    finally:
-        await bot.close()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    bot.run(settings.discord_token)

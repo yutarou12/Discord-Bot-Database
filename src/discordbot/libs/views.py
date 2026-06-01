@@ -44,12 +44,12 @@ class BotRegistrationModal(ui.Modal, title="Bot登録"):
         required=True,
         max_length=2000,
     )
-    invite_url = ui.TextInput(
-        label="招待URL",
-        placeholder="https://discord.com/api/oauth2/authorize?...",
-        required=False,
-        max_length=500,
-    )
+    # invite_url = ui.TextInput(
+    #     label="招待URL",
+    #     placeholder="https://discord.com/api/oauth2/authorize?...",
+    #     required=False,
+    #     max_length=500,
+    # )
 
     def __init__(self, service: BotRegistrationService, owner_id: int) -> None:
         super().__init__(timeout=300)
@@ -65,7 +65,7 @@ class BotRegistrationModal(ui.Modal, title="Bot登録"):
                 prefix=str(self.prefix.value),
                 genre=str(self.genre.value),
                 description=str(self.description.value),
-                invite_url=str(self.invite_url.value) if self.invite_url.value else None,
+                invite_url=None,
             )
         except (ValidationError, DuplicateBotError) as error:
             await interaction.response.send_message(str(error), ephemeral=True)
@@ -129,11 +129,14 @@ class BotEditModal(ui.Modal, title="Bot更新"):
 
 class BotSavedView(ui.LayoutView):
     def __init__(self, headline: str, entry: BotEntry) -> None:
-        super().__init__(timeout=180)
-        container = ui.Container(accent_colour=discord.Color.blurple())
-        container.add_item(ui.TextDisplay(f"# {headline}"))
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.small))
-        container.add_item(ui.TextDisplay(_entry_summary(entry)))
+        super().__init__()
+        container = ui.Container(
+            ui.TextDisplay(f"# {headline}"),
+            ui.Separator(spacing=discord.SeparatorSpacing.small),
+            ui.TextDisplay(_entry_summary(entry)),
+            accent_colour=discord.Color.blurple()
+        )
+
         self.add_item(container)
 
 
@@ -141,32 +144,49 @@ class BotDeleteConfirmView(ui.LayoutView):
     row = ui.ActionRow()
 
     def __init__(self, service: BotRegistrationService, entry: BotEntry) -> None:
-        super().__init__(timeout=180)
+        super().__init__()
         self._service = service
         self._entry = entry
-        container = ui.Container(accent_colour=discord.Color.red())
-        container.add_item(ui.TextDisplay("# Bot を削除しますか？"))
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.small))
-        container.add_item(ui.TextDisplay(_entry_summary(entry)))
+        container = ui.Container(
+            ui.TextDisplay("# Bot を削除しますか？"),
+            ui.Separator(spacing=discord.SeparatorSpacing.small),
+            ui.TextDisplay(_entry_summary(entry)),
+            accent_colour=discord.Color.red()
+        )
+
+        self.row.add_item(BotDeleteConfirmModalButton.Delete(service, entry))
+        self.row.add_item(BotDeleteConfirmModalButton.Cancel())
         self.add_item(container)
+        self.remove_item(self.row)
         self.add_item(self.row)
 
-    @row.button(label="削除する", style=discord.ButtonStyle.red)
-    async def delete_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        try:
-            self._service.delete_bot(entry_id=self._entry.id, owner_id=self._entry.owner_id)
-        except (EntryNotFoundError, PermissionError) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
-            return
-        except Exception:
-            await interaction.response.send_message("削除に失敗しました。時間をおいて再度お試しください。", ephemeral=True)
-            raise
 
-        await interaction.response.edit_message(view=BotSavedView("削除しました。", self._entry))
+class BotDeleteConfirmModalButton:
 
-    @row.button(label="キャンセル", style=discord.ButtonStyle.gray)
-    async def cancel_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        await interaction.response.send_message("削除を取り消しました。", ephemeral=True)
+    class Delete(ui.Button):
+        def __init__(self, service, entry):
+            self._service = service
+            self._entry = entry
+            super().__init__(label="削除する", style=discord.ButtonStyle.red)
+
+        async def callback(self, interaction: discord.Interaction):
+            try:
+                self._service.delete_bot(entry_id=self._entry.id, owner_id=self._entry.owner_id)
+            except (EntryNotFoundError, PermissionError) as error:
+                return await interaction.response.send_message(str(error), ephemeral=True)
+
+            except Exception:
+                await interaction.response.send_message("削除に失敗しました。時間をおいて再度お試しください。", ephemeral=True)
+                raise
+
+            return await interaction.response.edit_message(view=BotSavedView("削除しました。", self._entry))
+
+    class Cancel(ui.Button):
+        def __init__(self):
+            super().__init__(label="キャンセル", style=discord.ButtonStyle.gray)
+
+        async def callback(self, interaction: discord.Interaction):
+            return await interaction.response.send_message("削除を取り消しました。", ephemeral=True)
 
 
 class BotRegistrationButton(ui.Button):
@@ -290,38 +310,49 @@ class BotPageView(ui.LayoutView):
                 container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.small))
                 container.add_item(section)
 
+        self.row.add_item(BotPageViewButton.Previous(self._page_data, self._page_loader, self._title))
+        self.row.add_item(BotPageViewButton.Next(self._page_data, self._page_loader, self._title))
         self.add_item(container)
+        self.remove_item(self.row)
         self.add_item(self.row)
-        self.previous_page.disabled = self._page_data.page <= 1
-        self.next_page.disabled = self._page_data.page >= self._page_data.total_pages
 
-    @row.button(label="前へ", style=discord.ButtonStyle.gray)
-    async def previous_page(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        if self._page_data.page <= 1:
-            await interaction.response.send_message("これ以上前のページはありません。", ephemeral=True)
-            return
 
-        page = self._page_loader(self._page_data.page - 1)
-        await interaction.response.edit_message(view=BotPageView(self._page_loader, page, title=self._title))
+class BotPageViewButton:
+    class Previous(ui.Button):
+        def __init__(self, page_data, page_loader, title):
+            self._page_data = page_data
+            self._page_loader = page_loader
+            self._title = title
+            super().__init__(label="前へ", style=discord.ButtonStyle.gray)
 
-    @row.button(label="次へ", style=discord.ButtonStyle.gray)
-    async def next_page(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        if self._page_data.page >= self._page_data.total_pages:
-            await interaction.response.send_message("これ以上次のページはありません。", ephemeral=True)
-            return
+        async def callback(self, interaction: discord.Interaction):
+            if self._page_data.page <= 1:
+                self.disabled = True
+                return await interaction.response.send_message("これ以上前のページはありません。", ephemeral=True)
+            else:
+                self.disabled = False
+            page = self._page_loader(self._page_data.page - 1)
+            return await interaction.response.edit_message(view=BotPageView(self._page_loader, page, title=self._title))
 
-        page = self._page_loader(self._page_data.page + 1)
-        await interaction.response.edit_message(view=BotPageView(self._page_loader, page, title=self._title))
+    class Next(ui.Button):
+        def __init__(self, page_data, page_loader, title):
+            self._page_data = page_data
+            self._page_loader = page_loader
+            self._title = title
+            super().__init__(label="次へ", style=discord.ButtonStyle.gray)
 
-    @row.button(label="閉じる", style=discord.ButtonStyle.red)
-    async def close_view(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        await interaction.response.edit_message(view=None)
+        async def callback(self, interaction: discord.Interaction):
+            if self._page_data.page >= self._page_data.total_pages:
+                return await interaction.response.send_message("これ以上次のページはありません。", ephemeral=True)
+
+            page = self._page_loader(self._page_data.page + 1)
+            return await interaction.response.edit_message(view=BotPageView(self._page_loader, page, title=self._title))
 
 
 class SearchPanelView(ui.LayoutView):
     row = ui.ActionRow()
 
-    def __init__(self, service: BotRegistrationService, author_id: int) -> None:
+    def __init__(self, service: BotRegistrationService, author_id: int):
         super().__init__(timeout=300)
         self._service = service
         self._author_id = author_id
@@ -337,12 +368,17 @@ class SearchPanelView(ui.LayoutView):
         self.add_item(container)
         self.add_item(self.row)
 
-    @row.button(label="検索フォームを開く", style=discord.ButtonStyle.green)
-    async def open_search(self, interaction: discord.Interaction, button: ui.Button) -> None:
+class SearchPanelViewSearchButton(ui.Button):
+    def __init__(self, service: BotRegistrationService, author_id: int):
+        self._service = service
+        self._author_id = author_id
+        super().__init__(label="検索フォームを開く", style=discord.ButtonStyle.green)
+
+    async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._author_id:
-            await interaction.response.send_message("この操作はコマンド実行者のみ可能です。", ephemeral=True)
-            return
-        await interaction.response.send_modal(SearchModal(self._service, self._author_id))
+
+            return await interaction.response.send_message("この操作はコマンド実行者のみ可能です。", ephemeral=True)
+        return await interaction.response.send_modal(SearchModal(self._service, self._author_id))
 
 
 class SearchModal(ui.Modal, title="Bot検索"):
@@ -351,7 +387,7 @@ class SearchModal(ui.Modal, title="Bot検索"):
     name = ui.TextInput(label="Bot名", required=False, max_length=200)
     genre = ui.TextInput(label="ジャンル", required=False, max_length=80)
 
-    def __init__(self, service: BotRegistrationService, owner_id: int) -> None:
+    def __init__(self, service: BotRegistrationService, owner_id: int):
         super().__init__(timeout=300)
         self._service = service
         self._owner_id = owner_id
@@ -364,13 +400,11 @@ class SearchModal(ui.Modal, title="Bot検索"):
             genre=str(self.genre.value).strip() or None,
         )
         if not any((filters.bot_id, filters.prefix, filters.name, filters.genre)):
-            await interaction.response.send_message("少なくとも 1 つの検索条件を指定してください。", ephemeral=True)
-            return
+            return await interaction.response.send_message("少なくとも 1 つの検索条件を指定してください。", ephemeral=True)
 
         try:
             page = self._service.search_page(filters=filters, page=1, page_size=5)
         except ValidationError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
-            return
+            return await interaction.response.send_message(str(error), ephemeral=True)
 
-        await interaction.response.send_message(view=BotPageView(self._service, page, title="検索結果"), ephemeral=True)
+        return await interaction.response.send_message(view=BotPageView(self._service, page, title="検索結果"), ephemeral=True)
