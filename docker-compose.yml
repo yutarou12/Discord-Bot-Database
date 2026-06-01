@@ -1,0 +1,27 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DISCORD_BOT_DB_TOKEN: ${DISCORD_BOT_DB_TOKEN}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./discord_bots.db}
+      API_KEY: ${API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./:/app
+
+  api:
+    build: .
+    command: uvicorn webapi.app:app --host 0.0.0.0 --port 8000
+    environment:
+      DISCORD_BOT_DB_TOKEN: ${DISCORD_BOT_DB_TOKEN}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./discord_bots.db}
+      API_KEY: ${API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
