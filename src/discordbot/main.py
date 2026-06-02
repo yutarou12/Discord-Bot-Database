@@ -56,16 +56,6 @@ class DiscordBot(commands.Bot):
             except discord.ext.commands.ExtensionAlreadyLoaded:
                 await self.reload_extension(f'cogs.{ext}')
 
-    async def on_ready(self) -> None:
-        jst = datetime.now(timezone.utc) + timedelta(hours=9)
-        dpy_ver = discord.__version__
-        python_var = platform.python_version()
-        logger.info('--------------------------------')
-        logger.info(jst.strftime('%Y/%m/%d %H:%M:%S'))
-        logger.info(f'{self.user.name} ({self.user.id})')
-        logger.info(f'discord.py {dpy_ver} python {python_var}')
-        logger.info('--------------------------------')
-
 
 if __name__ == "__main__":
     logger = configure_logging(config.LOG_LEVEL)
