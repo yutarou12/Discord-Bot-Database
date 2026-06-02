@@ -1,16 +1,13 @@
 import os
 import logging
-import platform
-from datetime import datetime, timedelta, timezone
 
 import discord
 from discord.ext import commands
 
 import libs.config as config
+from libs.origin_handler import DatetimeFormatter
 from libs.service import BotRegistrationService
 from libs.storage import BotRepository
-
-logger = logging.getLogger(__name__)
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
