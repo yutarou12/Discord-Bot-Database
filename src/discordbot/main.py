@@ -23,12 +23,20 @@ allowed_mentions = discord.AllowedMentions(
 )
 
 
-def configure_logging(level_name: str) -> None:
-    logging.basicConfig(
-        level=getattr(logging, level_name, logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+def configure_logging(level_name: str) -> logging.Logger:
+    _logger = logging.getLogger("discord")
+    _logger.setLevel(getattr(logging, level_name, logging.INFO))
+    logging.getLogger('discord.http').setLevel(logging.INFO)
 
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    dt_fmt = '%Y-%m-%d %H:%M:%S'
+    formatter = DatetimeFormatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
+
+    handler.setFormatter(formatter)
+    _logger.addHandler(handler)
+
+    return _logger
 
 class DiscordBot(commands.Bot):
     def __init__(self, service: BotRegistrationService) -> None:
@@ -65,8 +73,6 @@ class DiscordBot(commands.Bot):
 if __name__ == "__main__":
     logger = configure_logging(config.LOG_LEVEL)
 
-    if not settings.discord_token:
-        raise RuntimeError("DISCORD_BOT_DB_TOKEN を .env に設定してください。")
     if not config.DISCORD_BOT_TOKEN:
         raise RuntimeError("DISCORD_BOT_TOKEN を .env に設定してください。")
 
@@ -74,5 +80,6 @@ if __name__ == "__main__":
     repository.initialize()
     service = BotRegistrationService(repository)
     bot = DiscordBot(service)
+    bot.logger = logger
 
     bot.run(config.DISCORD_BOT_TOKEN, log_handler=None)
