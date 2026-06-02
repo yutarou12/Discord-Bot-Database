@@ -7,6 +7,7 @@ import discord
 from discord.ext import commands
 
 from libs.config import load_settings
+import libs.config as config
 from libs.service import BotRegistrationService
 from libs.storage import BotRepository
 
@@ -63,15 +64,16 @@ class DiscordBot(commands.Bot):
 
 
 if __name__ == "__main__":
-    settings = load_settings()
-    configure_logging(settings.log_level)
+    logger = configure_logging(config.LOG_LEVEL)
 
     if not settings.discord_token:
         raise RuntimeError("DISCORD_BOT_DB_TOKEN を .env に設定してください。")
+    if not config.DISCORD_BOT_TOKEN:
+        raise RuntimeError("DISCORD_BOT_TOKEN を .env に設定してください。")
 
-    repository = BotRepository(settings.database_url)
+    repository = BotRepository(config.DATABASE_URL)
     repository.initialize()
     service = BotRegistrationService(repository)
     bot = DiscordBot(service)
 
-    bot.run(settings.discord_token)
+    bot.run(config.DISCORD_BOT_TOKEN, log_handler=None)
