@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 import discord
 from discord.ext import commands
 
-from libs.config import load_settings
 import libs.config as config
 from libs.service import BotRegistrationService
 from libs.storage import BotRepository
