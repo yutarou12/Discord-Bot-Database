@@ -35,6 +35,7 @@ def configure_logging(level_name: str) -> logging.Logger:
 
     return _logger
 
+
 class DiscordBot(commands.Bot):
     def __init__(self, service: BotRegistrationService) -> None:
         intents = discord.Intents.default()

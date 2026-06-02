@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone, timedelta
 
+
 class DatetimeFormatter(logging.Formatter):
     def formatTime(self, record: logging.LogRecord, datefmt=None):
         if datefmt is None:
