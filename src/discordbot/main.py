@@ -21,19 +21,28 @@ allowed_mentions = discord.AllowedMentions(
 
 
 def configure_logging(level_name: str) -> logging.Logger:
-    _logger = logging.getLogger("discord")
-    _logger.setLevel(getattr(logging, level_name, logging.INFO))
-    logging.getLogger('discord.http').setLevel(logging.INFO)
+    level = getattr(logging, level_name, logging.INFO)
 
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    dt_fmt = '%Y-%m-%d %H:%M:%S'
-    formatter = DatetimeFormatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
 
-    handler.setFormatter(formatter)
-    _logger.addHandler(handler)
+    # Avoid adding duplicate handlers if this function is called multiple times.
+    if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+        handler = logging.StreamHandler()
+        handler.setLevel(level)
+        dt_fmt = "%Y-%m-%d %H:%M:%S"
+        formatter = DatetimeFormatter(
+            "[{asctime}] [{levelname:<8}] {name}: {message}",
+            dt_fmt,
+            style="{",
+        )
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
 
-    return _logger
+    logging.getLogger("discord").setLevel(level)
+    logging.getLogger("discord.http").setLevel(logging.INFO)
+
+    return logging.getLogger("discord")
 
 
 class DiscordBot(commands.Bot):
