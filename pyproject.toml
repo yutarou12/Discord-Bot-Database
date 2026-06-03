@@ -19,6 +19,7 @@ dependencies = [
   "hiredis",
   "python-dotenv>=1.2.2",
   "jishaku>=2.7.5",
+  "asyncpg>=0.31.0",
 ]
 
 [tool.setuptools]

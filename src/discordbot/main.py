@@ -5,9 +5,11 @@ import discord
 from discord.ext import commands
 
 import libs.config as config
+
 from libs.origin_handler import DatetimeFormatter
 from libs.service import BotRegistrationService
 from libs.storage import BotRepository
+from libs.database import Database
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -76,7 +78,11 @@ if __name__ == "__main__":
     repository = BotRepository(config.DATABASE_URL)
     repository.initialize()
     service = BotRegistrationService(repository)
+
+    db = Database()
+
     bot = DiscordBot(service)
+    bot.db = db
     bot.logger = logger
 
     bot.run(config.DISCORD_BOT_TOKEN, log_handler=None)
