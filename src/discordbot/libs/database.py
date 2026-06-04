@@ -1,8 +1,3 @@
-import os
-import hashlib
-import logging
-from datetime import datetime
-
 import asyncpg
 
 from functools import wraps
@@ -17,7 +12,7 @@ class ProductionDatabase:
         self.pool = None
 
     async def setup(self):
-        self.pool = asyncpg.create_pool(f"postgresql://{config.POSTGRESQL_USER}:{config.POSTGRESQL_PASSWORD}@{config.POSTGRESQL_HOST_NAME}:{config.POSTGRESQL_PORT}/{config.POSTGRESQL_DATABASE_NAME}")
+        self.pool = await asyncpg.create_pool(f"postgresql://{config.POSTGRESQL_USER}:{config.POSTGRESQL_PASSWORD}@{config.POSTGRESQL_HOST_NAME}:{config.POSTGRESQL_PORT}/{config.POSTGRESQL_DATABASE_NAME}")
 
         async with self.pool.acquire() as conn:
             await conn.execute(
@@ -75,6 +70,7 @@ class ProductionDatabase:
         """Update a bot data from the database."""
         async with self.pool.acquire() as con:
             await con.execute()
+
 
 if config.DEBUG:
     Database = ProductionDatabase
