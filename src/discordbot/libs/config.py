@@ -20,6 +20,7 @@ ALLOWED_ORIGINS: tuple[str, ...] = _split_csv(os.getenv("CORS_ORIGINS", "http://
 
 TRACEBACK_CHANNEL_ID: int = int(os.environ.get("TRACEBACK_CHANNEL_ID", 0))
 ERROR_CHANNEL_ID: int = int(os.environ.get("ERROR_CHANNEL_ID", 0))
+REQUEST_CHANNEL_ID: int = int(os.environ.get("REQUEST_CHANNEL_ID", 0))
 
 API_KEY: str | None = os.getenv("API_KEY", "").strip() or None
 API_HOST: str = os.getenv("API_HOST", "0.0.0.0").strip() or "0.0.0.0"
