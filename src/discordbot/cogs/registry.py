@@ -7,8 +7,9 @@ from libs.views import BotPageView, BotRegistrationPanelView, EntrySelectionView
 
 
 class RegistryCog(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot) -> None:
         self.bot = bot
+        self.db = bot.db
 
     @property
     def service(self):
@@ -20,7 +21,7 @@ class RegistryCog(commands.Cog):
     )
     async def register(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(
-            view=BotRegistrationPanelView(self.service, interaction.user.id),
+            view=BotRegistrationPanelView(self.db, interaction.user.id),
             ephemeral=True,
         )
 
