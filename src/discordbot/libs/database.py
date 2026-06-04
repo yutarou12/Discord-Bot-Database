@@ -1,8 +1,3 @@
-import os
-import hashlib
-import logging
-from datetime import datetime
-
 import asyncpg
 
 from functools import wraps
@@ -75,6 +70,7 @@ class ProductionDatabase:
         """Update a bot data from the database."""
         async with self.pool.acquire() as con:
             await con.execute()
+
 
 if config.DEBUG:
     Database = ProductionDatabase

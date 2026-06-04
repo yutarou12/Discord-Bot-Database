@@ -1,6 +1,4 @@
 import logging
-import os
-import sys
 from typing import Sequence
 
 import discord
@@ -13,7 +11,7 @@ from libs.config import REQUEST_CHANNEL_ID
 from libs.origin_handler import BotInputDataModel, BotAddDataModel
 from libs.models import BotEntry, BotSearchFilters
 from libs.service import BotPage, BotRegistrationService, ValidationError
-from libs.storage import DuplicateBotError, EntryNotFoundError, PermissionError
+from libs.storage import EntryNotFoundError, PermissionError
 
 
 def _chunk_text(text: str, limit: int) -> list[str]:
@@ -96,7 +94,7 @@ def generate_registration_view(db: Database, owner_id: int, cache: BotInputDataM
 def generate_registration_container(db: Database, owner_id: int, cache: BotInputDataModel) -> discord.ui.Container:
     """登録ViewのUIコンテナの生成"""
     container = ui.Container(
-        ui.TextDisplay(f"# Discord Bot 登録パネル"),
+        ui.TextDisplay("# Discord Bot 登録パネル"),
         ui.TextDisplay(f"- **BotID** - {cache.bot_id}\n`登録後は一覧・検索・更新・削除の各コマンドで管理できます`"),
         ui.Separator(),
         ui.Section(
@@ -223,7 +221,7 @@ class BotRegistrationButton(ui.Button):
         elif self._input_type == "description":
             return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - 概要", "概要", "Botの概要を入力してください。", discord.TextStyle.long, '例: このBotはサーバーの案内を行います。', 150, self._cache.description, "description"))
         elif self._input_type == "invite_url":
-            return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - 招待リンク", "招待リンク", "Botの招待リンクを入力してください。", discord.TextStyle.short, '例: https://discord.com/api/oauth2/authorize?client_id=123456789012345678&permissions=0&scope=bot', None,  self._cache.invite_url, "invite_url"))
+            return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - 招待リンク", "招待リンク", "Botの招待リンクを入力してください。", discord.TextStyle.short, '例: https://discord.com/api/oauth2/authorize?client_id=123456789012345678&permissions=0&scope=bot', None, self._cache.invite_url, "invite_url"))
         elif self._input_type == "web_url":
             return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - ウェブサイトURL", "ウェブサイトURL", "BotのウェブサイトURLを入力してください。", discord.TextStyle.short, '例: https://example.com', None, self._cache.website_url, "website_url"))
         elif self._input_type == "support_server_url":
@@ -243,7 +241,6 @@ class BotRegistrationSubmitButton(ui.Button):
         if interaction.user.id != self._author_id:
             return await interaction.response.send_message("この操作はコマンド実行者のみ可能です。", ephemeral=True)
 
-        bot_add_data_model = BotAddDataModel.model_validate(self._cache)
         view = BotRegistrationSubmitView()
         await interaction.response.edit_message(view=view)
 
