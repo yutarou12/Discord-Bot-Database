@@ -1,8 +1,16 @@
+import logging
+import os
+import sys
 from typing import Sequence
 
 import discord
 from discord import ui
+from discord.enums import TextStyle
+from discord.components import SelectOption
 
+from libs.database import Database
+from libs.config import REQUEST_CHANNEL_ID
+from libs.origin_handler import BotInputDataModel, BotAddDataModel
 from libs.models import BotEntry, BotSearchFilters
 from libs.service import BotPage, BotRegistrationService, ValidationError
 from libs.storage import DuplicateBotError, EntryNotFoundError, PermissionError
@@ -32,50 +40,273 @@ def _entry_summary(entry: BotEntry) -> str:
     )
 
 
-class BotRegistrationModal(ui.Modal, title="Bot登録"):
-    bot_id = ui.TextInput(label="Bot ID", placeholder="123456789012345678", required=True)
-    name = ui.TextInput(label="Bot名", placeholder="例: 案内Bot", required=True, max_length=200)
-    prefix = ui.TextInput(label="プレフィックス", placeholder="例: !", required=True, max_length=32)
-    genre = ui.TextInput(label="ジャンル", placeholder="例: 情報 / 音楽 / 管理", required=True, max_length=80)
-    description = ui.TextInput(
-        label="説明",
-        placeholder="このBotの役割を簡潔に説明してください",
-        style=discord.TextStyle.paragraph,
-        required=True,
-        max_length=2000,
-    )
-    # invite_url = ui.TextInput(
-    #     label="招待URL",
-    #     placeholder="https://discord.com/api/oauth2/authorize?...",
-    #     required=False,
-    #     max_length=500,
-    # )
+async def send_request_channel(client, user_id: int, data: BotAddDataModel) -> None:
+    request_data = BotAddDataModel.model_validate(data)
 
-    def __init__(self, service: BotRegistrationService, owner_id: int) -> None:
-        super().__init__(timeout=300)
-        self._service = service
+    channel = client.get_channel(REQUEST_CHANNEL_ID)
+    if channel is None:
+        try:
+            channel = await client.fetch_channel(REQUEST_CHANNEL_ID)
+        except Exception:
+            logging.getLogger(__name__).exception("REQUEST_CHANNEL_ID のチャンネルを取得できませんでした。")
+            return
+
+    def _value(text: str | None) -> str:
+        return text if text else "未設定"
+
+    tags_text = ", ".join(request_data.tags) if request_data.tags else "未設定"
+
+    view = discord.ui.LayoutView(timeout=None)
+    container = ui.Container(
+        ui.TextDisplay("# Discord Bot 登録申請"),
+        ui.Separator(),
+        ui.TextDisplay(f"**BotID**: {_value(str(request_data.bot_id))}"),
+        ui.TextDisplay(f"**Bot名**: {_value(request_data.bot_name)}"),
+        ui.TextDisplay(f"**プレフィックス**: {_value(request_data.prefix)}"),
+        ui.TextDisplay(f"**説明**: {_value(request_data.description)}"),
+        ui.TextDisplay(f"**タグ**: {tags_text}"),
+        ui.TextDisplay(f"**招待URL**: {_value(request_data.invite_url)}"),
+        ui.TextDisplay(f"**ウェブサイトURL**: {_value(request_data.website_url)}"),
+        ui.TextDisplay(f"**サポートサーバーURL**: {_value(request_data.support_server_url)}"),
+        ui.TextDisplay(f"**バナーURL**: {_value(request_data.banner_url)}"),
+        ui.TextDisplay(f"**アイコンURL**: {_value(request_data.avatar_url)}"),
+        accent_colour=discord.Color.orange()
+    )
+
+    view.add_item(container)
+
+    action_row = ui.ActionRow()
+    action_row.add_item(ui.Button(label="承認する", style=discord.ButtonStyle.green, disabled=True))
+    action_row.add_item(ui.Button(label="キャンセルする", style=discord.ButtonStyle.gray, disabled=True))
+    view.add_item(action_row)
+
+    await client.db.add_request_bot_data(user_id, request_data.bot_id, request_data)
+    await channel.send(view=view)
+
+
+def generate_registration_view(db: Database, owner_id: int, cache: BotInputDataModel) -> discord.ui.LayoutView:
+    """登録ViewのUILayoutViewの生成"""
+    container = generate_registration_container(db=db, owner_id=owner_id, cache=cache)
+    view = discord.ui.LayoutView()
+    view.add_item(container)
+
+    return view
+
+
+def generate_registration_container(db: Database, owner_id: int, cache: BotInputDataModel) -> discord.ui.Container:
+    """登録ViewのUIコンテナの生成"""
+    container = ui.Container(
+        ui.TextDisplay(f"# Discord Bot 登録パネル"),
+        ui.TextDisplay(f"- **BotID** - {cache.bot_id}\n`登録後は一覧・検索・更新・削除の各コマンドで管理できます`"),
+        ui.Separator(),
+        ui.Section(
+            ui.TextDisplay(
+                f"**名前** - {cache.bot_name or ''}"
+            ),
+            accessory=BotRegistrationButton(db, owner_id, cache, input_type="name")
+        ),
+        ui.Separator(),
+        ui.Section(
+            ui.TextDisplay(
+                f"**プレフィックス** - {cache.prefix or ''}"
+            ),
+            accessory=BotRegistrationButton(db, owner_id, cache, input_type="prefix")
+        ),
+        ui.Separator(),
+        ui.Section(
+            ui.TextDisplay(
+                f"**概要**{"\n```\n" if cache.description else "" }{cache.description or ''}{ "\n```" if cache.description else "" }"
+            ),
+            accessory=BotRegistrationButton(db, owner_id, cache, input_type="description")
+        ),
+        ui.Separator(),
+        ui.Section(
+            ui.TextDisplay(
+                f"**招待リンク** - {cache.invite_url or ''}"
+            ),
+            accessory=BotRegistrationButton(db, owner_id, cache, input_type="invite_url")
+        ),
+        ui.Separator(),
+        ui.Section(
+            ui.TextDisplay(
+                f"**公式サイト** - {cache.support_server_url or ''}"
+            ),
+            accessory=BotRegistrationButton(db, owner_id, cache, input_type="support_server_url")
+        ),
+        ui.Separator(),
+        ui.Section(
+            ui.TextDisplay(
+                f"**WEBサイト** - {cache.support_server_url or ''}"
+            ),
+            accessory=BotRegistrationButton(db, owner_id, cache, input_type="web_url")
+        ),
+        ui.Separator(),
+        ui.TextDisplay("**ジャンル**"),
+        BotRegistrationPanelViewActionRow(BotRegistrationTagsSelect(db, owner_id, cache)),
+        ui.Separator(),
+        BotRegistrationPanelViewActionRow(BotRegistrationSubmitButton(db, owner_id, cache)),
+        accent_colour=discord.Color.blurple())
+
+    return container
+
+
+class BotRegistrationModal(ui.Modal):
+    def __init__(self, db: Database, owner_id: int, cache: BotInputDataModel,
+                 title: str, text: str, description: str, component_style: TextStyle, placeholder: str, max_length: int | None, default: str | None, cache_name: str) -> None:
+        super().__init__(title=title, timeout=300)
+        self.input = discord.ui.Label(
+            text=text,
+            description=description,
+            component=discord.ui.TextInput(
+                style=component_style,
+                placeholder=placeholder,
+                max_length=max_length,
+                default=default
+            ),
+        )
+        self.add_item(self.input)
+        self._db = db
         self._owner_id = owner_id
+        self._cache = cache
+        self._cache_name = cache_name
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        try:
-            entry = self._service.register_bot(
-                owner_id=self._owner_id,
-                bot_id=int(self.bot_id.value),
-                name=str(self.name.value),
-                prefix=str(self.prefix.value),
-                genre=str(self.genre.value),
-                description=str(self.description.value),
-                invite_url=None,
-            )
-        except (ValidationError, DuplicateBotError) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
-            return
-        except Exception:
-            await interaction.response.send_message("登録に失敗しました。時間をおいて再度お試しください。", ephemeral=True)
-            raise
+        setattr(self._cache, self._cache_name, self.input.component.value)
 
-        view = BotSavedView("登録しました。", entry)
-        await interaction.response.send_message(view=view, ephemeral=True)
+        view = generate_registration_view(db=self._db, owner_id=self._owner_id, cache=self._cache)
+
+        await interaction.response.edit_message(view=view)
+
+
+class BotRegistrationPrefixModal(ui.Modal, title="入力 - Bot プレフィックス"):
+    def __init__(self, db: Database, owner_id: int, cache: BotInputDataModel) -> None:
+        super().__init__(timeout=300)
+        self.prefix = discord.ui.Label(
+            text='プレフィックス',
+            description='プレフィックスを入力してください。例: !',
+            component=discord.ui.TextInput(
+                style=discord.TextStyle.short,
+                placeholder='例: !',
+                max_length=10,
+                default=cache.prefix or ""
+            ),
+        )
+        self.add_item(self.prefix)
+        self._db = db
+        self._owner_id = owner_id
+        self._cache = cache
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        prefix = self.prefix.component.value
+        self._cache.prefix = prefix
+
+        view = generate_registration_view(db=self._db, owner_id=self._owner_id, cache=self._cache)
+
+        return await interaction.response.edit_message(view=view)
+
+
+class BotRegistrationButton(ui.Button):
+    def __init__(self, db, author_id: int, cache: BotInputDataModel, input_type: str):
+        self._db = db
+        self._author_id = author_id
+        self._input_type = input_type
+        self._cache = cache
+        super().__init__(label="入力", style=discord.ButtonStyle.green)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self._author_id:
+            return await interaction.response.send_message("この操作はコマンド実行者のみ可能です。", ephemeral=True)
+        if self._input_type == "name":
+            return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - Bot名", "Bot名", "Botの名前を入力してください。", discord.TextStyle.short, '例: 案内Bot', 50, self._cache.bot_name, "bot_name"))
+        elif self._input_type == "prefix":
+            return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - プレフィックス", "プレフィックス", "Botのプレフィックスを入力してください。", discord.TextStyle.short, '例: !', 10, self._cache.prefix, "prefix"))
+        elif self._input_type == "description":
+            return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - 概要", "概要", "Botの概要を入力してください。", discord.TextStyle.long, '例: このBotはサーバーの案内を行います。', 150, self._cache.description, "description"))
+        elif self._input_type == "invite_url":
+            return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - 招待リンク", "招待リンク", "Botの招待リンクを入力してください。", discord.TextStyle.short, '例: https://discord.com/api/oauth2/authorize?client_id=123456789012345678&permissions=0&scope=bot', None,  self._cache.invite_url, "invite_url"))
+        elif self._input_type == "web_url":
+            return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - ウェブサイトURL", "ウェブサイトURL", "BotのウェブサイトURLを入力してください。", discord.TextStyle.short, '例: https://example.com', None, self._cache.website_url, "website_url"))
+        elif self._input_type == "support_server_url":
+            return await interaction.response.send_modal(BotRegistrationModal(self._db, self._author_id, self._cache, "入力 - サポートサーバー", "サポートサーバーURL", "BotのサポートサーバーURLを入力してください。", discord.TextStyle.short, '例: https://discord.gg/sXnAt7C8', 28, self._cache.support_server_url, "support_server_url"))
+        return await interaction.response.send_message("不明な入力タイプです。", ephemeral=True)
+
+
+class BotRegistrationSubmitButton(ui.Button):
+    def __init__(self, db: Database, author_id: int, cache: BotInputDataModel):
+        self._db = db
+        self._author_id = author_id
+        self._cache = cache
+
+        super().__init__(label="登録", style=discord.ButtonStyle.blurple)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self._author_id:
+            return await interaction.response.send_message("この操作はコマンド実行者のみ可能です。", ephemeral=True)
+
+        bot_add_data_model = BotAddDataModel.model_validate(self._cache)
+        view = BotRegistrationSubmitView()
+        await interaction.response.edit_message(view=view)
+
+        await send_request_channel(interaction.client, interaction.user.id, self._cache)
+
+
+class BotRegistrationSubmitView(ui.LayoutView):
+    def __init__(self):
+        super().__init__(timeout=300)
+        container = ui.Container(
+            ui.TextDisplay("# Discord Bot 登録パネル"),
+            ui.TextDisplay(
+                "Botの申請を行いました。承認次第掲載されます。"
+            ),
+            accent_colour=discord.Color.blurple()
+        )
+
+        self.add_item(container)
+
+
+class BotRegistrationPanelView(ui.LayoutView):
+    def __init__(self, db: Database, author_id: int, bot_id: int, bot: discord.User | None) -> None:
+        super().__init__(timeout=300)
+
+        cache = BotInputDataModel()
+        cache.bot_id = bot_id
+        if bot:
+            cache.bot_name = bot.name
+            cache.avatar_url = bot.avatar.url if bot.avatar else None
+            cache.banner_url = bot.banner.url if bot.banner else None
+
+        container = generate_registration_container(db=db, owner_id=author_id, cache=cache)
+
+        self.add_item(container)
+
+
+class BotRegistrationPanelViewActionRow(ui.ActionRow):
+    def __init__(self, select):
+        super().__init__()
+        self.add_item(select)
+
+
+class BotRegistrationTagsSelect(ui.Select):
+    def __init__(self, db: Database, author_id: int, cache: BotInputDataModel) -> None:
+        self._db = db
+        self._owner_id = author_id
+        self._cache = cache
+
+        options = [
+            SelectOption(label='Fun', value='fun', default=True if 'fun' in cache.tags else False),
+            SelectOption(label='Server', value='server', default=True if 'server' in cache.tags else False),
+            SelectOption(label='Voice', value='voice', default=True if 'voice' in cache.tags else False),
+            SelectOption(label='Admin', value='admin', default=True if 'admin' in cache.tags else False),
+        ]
+        super().__init__(placeholder='Botのジャンルを選択してください。', min_values=1, max_values=4, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_values = self.values
+
+        self._cache.tags = selected_values
+        view = generate_registration_view(db=self._db, owner_id=self._owner_id, cache=self._cache)
+
+        return await interaction.response.edit_message(view=view)
 
 
 class BotEditModal(ui.Modal, title="Bot更新"):
@@ -187,38 +418,6 @@ class BotDeleteConfirmModalButton:
 
         async def callback(self, interaction: discord.Interaction):
             return await interaction.response.send_message("削除を取り消しました。", ephemeral=True)
-
-
-class BotRegistrationButton(ui.Button):
-    def __init__(self, service, author_id):
-        self._service = service
-        self._author_id = author_id
-        super().__init__(label="登録フォームを開く", style=discord.ButtonStyle.green)
-
-    async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self._author_id:
-            return await interaction.response.send_message("この操作はコマンド実行者のみ可能です。", ephemeral=True)
-        return await interaction.response.send_modal(BotRegistrationModal(self._service, self._author_id))
-
-
-class BotRegistrationPanelView(ui.LayoutView):
-    row = ui.ActionRow()
-
-    def __init__(self, service: BotRegistrationService, author_id: int) -> None:
-        super().__init__(timeout=300)
-        container = ui.Container(
-            ui.TextDisplay("# Discord Bot 登録パネル"),
-            ui.Separator(spacing=discord.SeparatorSpacing.small),
-            ui.TextDisplay(
-                "- `登録` を押すと登録フォームを開きます。\n"
-                "- 登録後は一覧・検索・更新・削除の各コマンドで管理できます。"
-            ),
-            accent_colour=discord.Color.blurple())
-
-        self.row.add_item(BotRegistrationButton(service, author_id))
-        self.add_item(container)
-        self.remove_item(self.row)
-        self.add_item(self.row)
 
 
 class EntryChoiceSelect(ui.Select):
