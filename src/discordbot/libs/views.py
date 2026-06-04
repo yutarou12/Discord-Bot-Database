@@ -113,7 +113,7 @@ def generate_registration_container(db: Database, owner_id: int, cache: BotInput
         ui.Separator(),
         ui.Section(
             ui.TextDisplay(
-                f"**概要**{"\n```\n" if cache.description else "" }{cache.description or ''}{ "\n```" if cache.description else "" }"
+                f"**概要**{"\n```\n" if cache.description else ""}{cache.description or ''}{"\n```" if cache.description else ""}"
             ),
             accessory=BotRegistrationButton(db, owner_id, cache, input_type="description")
         ),
