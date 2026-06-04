@@ -17,7 +17,7 @@ class ProductionDatabase:
         self.pool = None
 
     async def setup(self):
-        self.pool = asyncpg.create_pool(f"postgresql://{config.POSTGRESQL_USER}:{config.POSTGRESQL_PASSWORD}@{config.POSTGRESQL_HOST_NAME}:{config.POSTGRESQL_PORT}/{config.POSTGRESQL_DATABASE_NAME}")
+        self.pool = await asyncpg.create_pool(f"postgresql://{config.POSTGRESQL_USER}:{config.POSTGRESQL_PASSWORD}@{config.POSTGRESQL_HOST_NAME}:{config.POSTGRESQL_PORT}/{config.POSTGRESQL_DATABASE_NAME}")
 
         async with self.pool.acquire() as conn:
             await conn.execute(
