@@ -15,13 +15,13 @@ class RegistryCog(commands.Cog):
     def service(self):
         return self.bot.service
 
-    @app_commands.command(
-        name="register",
-        description="Botを登録します"
-    )
-    async def register(self, interaction: discord.Interaction) -> None:
+    @app_commands.command(name="register", description="Botを登録します")
+    @app_commands.describe(bot_id="登録申請するBotのIDを入力してください。")
+    async def register(self, interaction: discord.Interaction, bot_id: str) -> None:
+        bot_id = int(bot_id)
+        bot = await self.bot.fetch_user(bot_id)
         await interaction.response.send_message(
-            view=BotRegistrationPanelView(self.db, interaction.user.id),
+            view=BotRegistrationPanelView(self.db, interaction.user.id, bot_id, bot),
             ephemeral=True,
         )
 
